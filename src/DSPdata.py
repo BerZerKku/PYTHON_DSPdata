@@ -9,6 +9,7 @@ Created on 13.12.2014
 #import numpy
 import serial
 import sys
+import time
 import FileDialog  # для py2exe
 
 #from matplotlib import mlab
@@ -40,9 +41,10 @@ class DSPdata():
     def __init__(self):
         pass
 
+
     def __str__(self):
         return u"Версия " + self.VERSION + ", " + self.DATE
-        pass
+
 
     def setPort(self, num):
         ''' int -> None
@@ -55,41 +57,45 @@ class DSPdata():
             self.num = num - 1
         except serial.SerialException, e:
             raise IOError
-        pass
+
 
     def readPort(self):
         ''' None -> None
         
             Считывание данных из порта.
         '''
+        self.buf[:] = []
         try:
-            s = serial.Serial(self.num, 115200, timeout=4)
+            # timeout - максимальное время между принимаемыми символами
+            s = serial.Serial(self.num, 115200, timeout=0.01)
         except serial.SerialException, e:
             raise IOError
 
+        # очистка буфера приема
+        s.flushInput()
+        # отправка команды запроса
         s.write(bytearray.fromhex(self.com))
-        tmp = s.read(50000)
 
+        print u"Чтение данных."
 
-        for x in tmp:
-            self.buf.append(x.encode('hex').upper())
+        while True:
+            tmp = s.read()
 
-        sys.stdout.write(u"Считано %d байт данных.\n" % len(self.buf))
+            if len(tmp) == 0:
+                break
+
+            self.buf.append(tmp.encode('hex').upper())
+
+        print u"Принято %d байт данных." % len(self.buf)
 
         s.close()
-        pass
+
 
     def printData(self):
         ''' None -> None
         
             Вывод данных из буфера на график.
         '''
-
-        pyplot.xkcd()
-        pyplot.xlabel(u'Номер отсчета')
-        pyplot.ylabel(u'Уровень')
-        pyplot.title(u'Данные DSP')
-
 #        xlist = mlab.frange(xmin, xmax, xstep)
 
         # кол-во массивов данных в принятом буфере
@@ -115,15 +121,21 @@ class DSPdata():
         xstep = 1
         xlist = range(xmin, xmax, xstep)
 
-        pyplot.figure(1)
+        pyplot.xkcd()  # Вид графика от руки
+        pyplot.figure(u"Данные DSP")
+#        pyplot.xlabel(u'Номер отсчета')
+#        pyplot.ylabel(u'Уровень')
+#        pyplot.title(u'Данные DSP')
 
         for i in range(0, num):
             # 3 ряда, 2 строки, номер графика
-            pyplot.subplot(num / 2, 2, i + 1)
+            sub = pyplot.subplot(num / 2, 2, i + 1)
+            if (i % 2) == 1:
+                sub.yaxis.set_label_position("right")
             pyplot.grid()
             pyplot.plot(xlist, ydata[i], 'g', label=u"Данные")
-            pyplot.title(u"Номер %d" % (i + 1))
-#            pyplot.ylabel(u"Номер %d" % (i + 1))
+#            pyplot.title(u"Номер %d" % (i + 1))
+            pyplot.ylabel(u"Номер %d" % (i + 1))
             # небоьшое расширение диапазона выводимых значений
             dmin = min(ydata[i])
             dmax = max(ydata[i])
@@ -136,7 +148,7 @@ class DSPdata():
             # могло быть [1001, 1002, 1003] -> 1e3 + [1, 2, 3])
             pyplot.ticklabel_format(useOffset=False)
         pyplot.show()
-        pass
+
 
 #-------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -177,5 +189,4 @@ if __name__ == '__main__':
         sys.exit()
 
     print u"Завершение работы."
-    pass
 
