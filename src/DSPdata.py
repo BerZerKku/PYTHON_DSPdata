@@ -16,6 +16,11 @@ import FileDialog  # для py2exe
 from matplotlib import rc
 from matplotlib import pyplot
 from matplotlib import ticker
+from matplotlib.widgets import Button, RadioButtons
+from serial.tools import list_ports
+#from PyQt4.Qt import right
+
+
 
 # Для работы кириллицы
 font = {'family': 'Verdana', 'weight': 'normal'}
@@ -26,8 +31,11 @@ class DSPdata():
     VERSION = u"1.01"
     DATE = u"13.12.2014"
 
+    ## Кол-во отображаемых графиков (массивов в принятом сообщении)
+    NUMBER_PLOTS = 6
+
     ## Имя COM-порта
-    num = 4
+    num = 3
 
     ## Буфер данных
     buf = []
@@ -38,29 +46,48 @@ class DSPdata():
     ## Команда запроса данных
     com = "37"
 
+    ## Графики
+    _line = []
+
+    ## Оси ?!
+    _ax = []
+
+    ## График
+    _fig = None
+
+    ##
     def __init__(self):
         pass
 
-
+    ##
     def __str__(self):
         return u"Версия " + self.VERSION + ", " + self.DATE
 
-
-    def setPort(self, num):
-        ''' int -> None
+    ##
+    def setPort(self, label):
+        ''' (int) -> None
         
             Устнановка номера используемого порта.
         '''
-        try:
-            s = serial.Serial(num - 1)
-            s.close()
-            self.num = num - 1
-        except serial.SerialException, e:
-            raise IOError
+        self.num = int(label[3:]) - 1
+#        try:
+#            s = serial.Serial(num - 1)
+#            s.close()
+#            self.num = num - 1
+#        except serial.SerialException, e:
+#            raise IOError
 
+    #
+    def findPorts(self):
+        ''' (None) -> list of str
+        
+            Возвращает список доступных портов.
+        '''
+        return [x[0] for x in list_ports.comports()]
 
+    ##
     def readPort(self):
-        ''' None -> None
+        ''' (None) -> None
         
             Считывание данных из порта.
         '''
@@ -90,7 +117,71 @@ class DSPdata():
 
         s.close()
 
+    ##
+    def setupPlot(self):
+        ''' (None) -> None
+        
+            Подготовка графиков к выводу.
+        '''
 
+#        pyplot.xkcd()  # Вид графика от руки
+        self._fig = pyplot.figure(u"Данные DSP")
+
+        self._ax[:] = []
+        self._line[:] = []
+        for i in range(self.NUMBER_PLOTS):
+            a = self._fig.add_subplot(self.NUMBER_PLOTS / 2, 2, i + 1)
+            pyplot.ylabel(u"Номер %d" % (i + 1))
+            l, = a.plot([0], [0], 'g', label=u"Данные")
+            self._ax.append(a)
+            self._line.append(l)
+            # отключение автоматического смещения по осям (например, для оси y
+            # могло быть [1001, 1002, 1003] -> 1e3 + [1, 2, 3])
+            pyplot.ticklabel_format(useOffset=False)
+            pyplot.grid()
+
+        pyplot.subplots_adjust(right=0.75)
+        # добавление кнопки
+#        pyplot.subplots_adjust(bottom=0.2)
+#        axprev = pyplot.axes([0.7, 0.05, 0.1, 0.075])
+#        axrefresh = pyplot.axes([0.81, 0.05, 0.1, 0.075])
+        rax = pyplot.axes([0.80, 0.1, 0.15, 0.075])
+        brefresh = Button(rax, u'Обновить', color=u'green', hovercolor=u'red')
+        brefresh.on_clicked(self.refreshPlot)
+
+        # добавление переключателя
+        rax = pyplot.axes([0.80, 0.2, 0.15, 0.15])
+        ports = self.findPorts()
+        ports.sort()
+        radio = RadioButtons(rax, ports)
+        radio.on_clicked(self.setPort)
+        self.setPort(radio.labels[0].get_text())
+
+        pyplot.show()
+
+    ##
+    def clearPlot(self):
+        ''' (None) -> None
+         
+            Очистка графиков.
+        '''
+        for i in range(self.NUMBER_PLOTS):
+            self._line[i].set_data([0], [0])
+            self._ax[i].set_ylim(0, 1)
+            self._ax[i].set_xlim(0, 1)
+        self._fig.canvas.draw()
+
+    ##
+    def refreshPlot(self, event=None):
+        ''' () -> None
+        
+            Обработчик нажатия кнопки.
+        '''
+        self.clearPlot()
+        self.readPort()
+        self.printData()
+
+    ##
     def printData(self):
         ''' None -> None
         
@@ -98,20 +189,17 @@ class DSPdata():
         '''
 #        xlist = mlab.frange(xmin, xmax, xstep)
 
-        # кол-во массивов данных в принятом буфере
-        num = 6
-
         # массивы данных
         ydata = []
-        for i in range(num):
+        for i in range(self.NUMBER_PLOTS):
             ydata.append([])
 
         # заполнение массивов данных (ось-Y) из буфера
-        for i in range(0, len(self.buf) / (2 * num)):
-            for j in range(0, num):
+        for i in range(0, len(self.buf) / (2 * self.NUMBER_PLOTS)):
+            for j in range(0, self.NUMBER_PLOTS):
                 # данные uint в буфере лежат в hex виде, младшим байтом вперед
-                val = self.buf[i * 2 * num + j * 2 + 1]
-                val += self.buf[i * 2 * num + j * 2]
+                val = self.buf[i * 2 * self.NUMBER_PLOTS + j * 2 + 1]
+                val += self.buf[i * 2 * self.NUMBER_PLOTS + j * 2]
                 val = int(val, 16)
                 ydata[j].append(val)
 
@@ -121,33 +209,42 @@ class DSPdata():
         xstep = 1
         xlist = range(xmin, xmax, xstep)
 
-        pyplot.xkcd()  # Вид графика от руки
-        pyplot.figure(u"Данные DSP")
-#        pyplot.xlabel(u'Номер отсчета')
-#        pyplot.ylabel(u'Уровень')
-#        pyplot.title(u'Данные DSP')
+        for i in range(self.NUMBER_PLOTS):
+#            # 3 ряда, 2 строки, номер графика
+#            sub = pyplot.subplot(num / 2, 2, i + 1)
+#            self._ax[i]
+            self._line[i].set_data(xlist, ydata[i])
 
-        for i in range(0, num):
-            # 3 ряда, 2 строки, номер графика
-            sub = pyplot.subplot(num / 2, 2, i + 1)
+            # для графиков расположенных справа, подпись для y-оси выведем
+            # справа
             if (i % 2) == 1:
-                sub.yaxis.set_label_position("right")
-            pyplot.grid()
-            pyplot.plot(xlist, ydata[i], 'g', label=u"Данные")
-#            pyplot.title(u"Номер %d" % (i + 1))
-            pyplot.ylabel(u"Номер %d" % (i + 1))
+                self._ax[i].yaxis.set_label_position("right")
+
             # небоьшое расширение диапазона выводимых значений
-            dmin = min(ydata[i])
-            dmax = max(ydata[i])
-            dm = (dmax - dmin) * 0.05
-            if (dmin != dmax):
-                pyplot.ylim(dmin - dm, dmax + dm)
-            dmax = int((xmax - xmin) * 0.02)
-            pyplot.xlim(xmin - dmax, xmax + dmax)
-            # отключение автоматического смещения по осям (например, для оси y
-            # могло быть [1001, 1002, 1003] -> 1e3 + [1, 2, 3])
-            pyplot.ticklabel_format(useOffset=False)
-        pyplot.show()
+            if len(ydata[i]) != 0:
+                dmin = min(ydata[i])
+                dmax = max(ydata[i])
+            else:
+                dmin = dmax = 0
+            if dmax != dmin:
+                dm = (dmax - dmin) * 0.05
+            elif dmax != 0:
+                dm = dmax * 0.01
+            else:
+                dm = 1
+            self._ax[i].set_ylim(dmin - dm, dmax + dm)
+
+            if xmax != xmin:
+                dmax = int((xmax - xmin) * 0.02)
+            elif xmax != 0:
+                dmax = dmax * 0.01
+            else:
+                dmax = 1
+            self._ax[i].set_xlim(xmin - dmax, xmax + dmax)
+#
+        self._fig.canvas.draw()
+#
+
 
 
 #-------------------------------------------------------------------------------
@@ -169,24 +266,29 @@ if __name__ == '__main__':
         if arg[:2] == '-p':
             port = int(arg[2:])
 
-    try:
-        dspD.setPort(port)
-    except:
-        print u"Не удалось открыть порт COM" + str(port) + u"."
-        sys.exit()
+#    try:
+#        dspD.setPort(port)
+#    except:
+#        print u"Не удалось открыть порт COM" + str(port) + u"."
+#        sys.exit()
+
+#    try:
+#        dspD.readPort()
+#    except:
+#        print u"Не удалось считать данные."
+#        sys.exit()
 
     try:
-        dspD.readPort()
+        dspD.setupPlot()
     except:
-        print u"Не удалось считать данные."
+        print u"Не удалось подготовить график."
         sys.exit()
 
-
-    try:
-        dspD.printData()
-    except:
-        print u"Не удалось вывести полученные данные на график."
-        sys.exit()
+#    try:
+#        dspD.printData()
+#    except:
+#        print u"Не удалось вывести полученные данные на график."
+#        sys.exit()
 
     print u"Завершение работы."
 
