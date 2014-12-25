@@ -16,7 +16,7 @@ import FileDialog  # для py2exe
 from matplotlib import rc
 from matplotlib import pyplot
 from matplotlib import ticker
-from matplotlib.widgets import Button, RadioButtons
+from matplotlib.widgets import Button, RadioButtons, CheckButtons
 from serial.tools import list_ports
 #from PyQt4.Qt import right
 
@@ -132,7 +132,7 @@ class DSPdata():
         for i in range(self.NUMBER_PLOTS):
             a = self._fig.add_subplot(self.NUMBER_PLOTS / 2, 2, i + 1)
             pyplot.ylabel(u"Номер %d" % (i + 1))
-            l, = a.plot([0], [0], 'g', label=u"Данные")
+            l, = a.plot([0], [0], 'bo-', label=u"График %s" % (i + 1))
             self._ax.append(a)
             self._line.append(l)
             # отключение автоматического смещения по осям (например, для оси y
@@ -142,20 +142,23 @@ class DSPdata():
 
         pyplot.subplots_adjust(right=0.75)
         # добавление кнопки
-#        pyplot.subplots_adjust(bottom=0.2)
-#        axprev = pyplot.axes([0.7, 0.05, 0.1, 0.075])
-#        axrefresh = pyplot.axes([0.81, 0.05, 0.1, 0.075])
         rax = pyplot.axes([0.80, 0.1, 0.15, 0.075])
         brefresh = Button(rax, u'Обновить', color=u'green', hovercolor=u'red')
         brefresh.on_clicked(self.refreshPlot)
 
-        # добавление переключателя
-        rax = pyplot.axes([0.80, 0.2, 0.15, 0.15])
+        # добавление переключателя для выбора COM-порта
+        rax = pyplot.axes([0.80, 0.2, 0.15, 0.175])
         ports = self.findPorts()
         ports.sort()
         radio = RadioButtons(rax, ports)
         radio.on_clicked(self.setPort)
         self.setPort(radio.labels[0].get_text())
+
+        # добавление выбора нужных графиков
+        rax = pyplot.axes([0.80, 0.4, 0.15, 0.3])
+        name = [u"График %d" % (x + 1) for x in range(self.NUMBER_PLOTS)]
+        state = [True for x in range(self.NUMBER_PLOTS)]
+        check = CheckButtons(rax, name, state)
 
         pyplot.show()
 
@@ -214,34 +217,26 @@ class DSPdata():
 #            sub = pyplot.subplot(num / 2, 2, i + 1)
 #            self._ax[i]
             self._line[i].set_data(xlist, ydata[i])
-
             # для графиков расположенных справа, подпись для y-оси выведем
             # справа
             if (i % 2) == 1:
                 self._ax[i].yaxis.set_label_position("right")
 
             # небоьшое расширение диапазона выводимых значений
+            dmax = 32768
+            dmin = 0
             if len(ydata[i]) != 0:
-                dmin = min(ydata[i])
-                dmax = max(ydata[i])
-            else:
-                dmin = dmax = 0
-            if dmax != dmin:
-                dm = (dmax - dmin) * 0.05
-            elif dmax != 0:
-                dm = dmax * 0.01
-            else:
-                dm = 1
-            self._ax[i].set_ylim(dmin - dm, dmax + dm)
+                dmax = max(dmax, max(ydata[i]))
+                dmin = min(dmin, min(ydata[i]))
+            self._ax[i].set_ylim(dmin * 0.95, dmax * 1.05)
 
-            if xmax != xmin:
-                dmax = int((xmax - xmin) * 0.02)
-            elif xmax != 0:
-                dmax = dmax * 0.01
-            else:
-                dmax = 1
-            self._ax[i].set_xlim(xmin - dmax, xmax + dmax)
+            dmax = 1
+            dmin = 0
+            if len(ydata[i]) != 0:
+                dmax = max(dmax, len(ydata[i]))
+            self._ax[i].set_xlim(dmin, dmax)
 #
+        pyplot.legend()
         self._fig.canvas.draw()
 #
 
