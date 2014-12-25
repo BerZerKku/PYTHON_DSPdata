@@ -12,7 +12,7 @@ data_files = [("Microsoft.VC90.CRT", glob(r'C:\Python27\Microsoft.VC90.CRT\*.*')
 data_files.extend(matplotlib.get_py2exe_datafiles())
 
 setup(
-    console=['DSPdata.py'],
+    windows=['DSPdata.py'],
     options={
         'py2exe':{
 			"compressed": 2, 

@@ -17,6 +17,7 @@ from matplotlib import rc
 from matplotlib import pyplot
 from matplotlib import ticker
 from matplotlib.widgets import Button, RadioButtons, CheckButtons
+from matplotlib.widgets import Cursor
 from serial.tools import list_ports
 #from PyQt4.Qt import right
 
@@ -176,6 +177,9 @@ class DSPdata():
         state = [True for x in range(self.NUMBER_PLOTS)]
         check = CheckButtons(rax, name, state)
         check.on_clicked(self.checkPlot)
+
+        # мульти курсор
+        cursor = Cursor(self._ax, horizOn=False, useblit=True)
 
         pyplot.show()
 
