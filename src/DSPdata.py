@@ -50,7 +50,7 @@ class DSPdata():
     _line = []
 
     ## Оси ?!
-    _ax = []
+    _ax = None
 
     ## График
     _fig = None
@@ -118,6 +118,16 @@ class DSPdata():
         s.close()
 
     ##
+    def checkPlot(self, label):
+        ''' (None) -> None
+        
+            Вкл./выкл. отображения графиков
+        '''
+        num = int(label[-1]) - 1
+        self._line[num].set_visible(not self._line[num].get_visible())
+        self._fig.canvas.draw()
+
+    ##
     def setupPlot(self):
         ''' (None) -> None
         
@@ -125,25 +135,31 @@ class DSPdata():
         '''
 
 #        pyplot.xkcd()  # Вид графика от руки
-        self._fig = pyplot.figure(u"Данные DSP")
-
-        self._ax[:] = []
-        self._line[:] = []
+#        self._fig = pyplot.figure(u"Данные DSP")
+        self._fig = pyplot.figure(u"Данные DSP")  # facecolor='white'
+        self._ax = pyplot.subplot()
+        pyplot.axis('tight')
         for i in range(self.NUMBER_PLOTS):
-            a = self._fig.add_subplot(self.NUMBER_PLOTS / 2, 2, i + 1)
-            pyplot.ylabel(u"Номер %d" % (i + 1))
-            l, = a.plot([0], [0], 'bo-', label=u"График %s" % (i + 1))
-            self._ax.append(a)
+            d = range(2)
+            y = range(i, 2 + i)
+            l, = self._ax.plot(d, y, '.-', lw=2, label=str(i + 1))
             self._line.append(l)
-            # отключение автоматического смещения по осям (например, для оси y
-            # могло быть [1001, 1002, 1003] -> 1e3 + [1, 2, 3])
-            pyplot.ticklabel_format(useOffset=False)
-            pyplot.grid()
 
+        # loc='lower left', bbox_to_anchor=(1.0, 0.4),
+        pyplot.legend(framealpha=0.5, fancybox=True)
+        self._ax.axis('auto')
+
+        pyplot.grid()
+        # отключение автоматического смещения по осям (например, для оси y
+        # могло быть [1001, 1002, 1003] -> 1e3 + [1, 2, 3])
+        pyplot.ticklabel_format(useOffset=False)
+        # смещение области чертежа в форме
         pyplot.subplots_adjust(right=0.75)
+
         # добавление кнопки
         rax = pyplot.axes([0.80, 0.1, 0.15, 0.075])
-        brefresh = Button(rax, u'Обновить', color=u'green', hovercolor=u'red')
+        brefresh = Button(rax, u'Обновить', color=u'green',
+                          hovercolor=u'yellow')
         brefresh.on_clicked(self.refreshPlot)
 
         # добавление переключателя для выбора COM-порта
@@ -159,6 +175,7 @@ class DSPdata():
         name = [u"График %d" % (x + 1) for x in range(self.NUMBER_PLOTS)]
         state = [True for x in range(self.NUMBER_PLOTS)]
         check = CheckButtons(rax, name, state)
+        check.on_clicked(self.checkPlot)
 
         pyplot.show()
 
@@ -168,21 +185,26 @@ class DSPdata():
          
             Очистка графиков.
         '''
+        d = range(1)
         for i in range(self.NUMBER_PLOTS):
-            self._line[i].set_data([0], [0])
-            self._ax[i].set_ylim(0, 1)
-            self._ax[i].set_xlim(0, 1)
+            self._line[i].set_data(d, d)
+
+        self._ax.set_ylim(0, 1)
+        self._ax.set_xlim(0, 1)
         self._fig.canvas.draw()
 
     ##
     def refreshPlot(self, event=None):
         ''' () -> None
         
-            Обработчик нажатия кнопки.
+            Обработчик нажатия кнопки обновления графиков.
         '''
-        self.clearPlot()
-        self.readPort()
-        self.printData()
+        try:
+            self.clearPlot()
+            dspD.readPort()
+            self.printData()
+        except:
+            print u"Не удалось считать данные."
 
     ##
     def printData(self):
@@ -213,30 +235,16 @@ class DSPdata():
         xlist = range(xmin, xmax, xstep)
 
         for i in range(self.NUMBER_PLOTS):
-#            # 3 ряда, 2 строки, номер графика
-#            sub = pyplot.subplot(num / 2, 2, i + 1)
-#            self._ax[i]
             self._line[i].set_data(xlist, ydata[i])
-            # для графиков расположенных справа, подпись для y-оси выведем
-            # справа
-            if (i % 2) == 1:
-                self._ax[i].yaxis.set_label_position("right")
 
-            # небоьшое расширение диапазона выводимых значений
-            dmax = 32768
-            dmin = 0
-            if len(ydata[i]) != 0:
-                dmax = max(dmax, max(ydata[i]))
-                dmin = min(dmin, min(ydata[i]))
-            self._ax[i].set_ylim(dmin * 0.95, dmax * 1.05)
+        xmax = 1
+        ymax = 1
+        if len(ydata[i]) != 0:
+            xmax = max(xmax, len(ydata[i]))
+            ymax = max(ymax, max([max(x) for x in ydata]))
+        self._ax.set_xlim(0, xmax)
+        self._ax.set_ylim(0, ymax)
 
-            dmax = 1
-            dmin = 0
-            if len(ydata[i]) != 0:
-                dmax = max(dmax, len(ydata[i]))
-            self._ax[i].set_xlim(dmin, dmax)
-#
-        pyplot.legend()
         self._fig.canvas.draw()
 #
 
@@ -265,12 +273,6 @@ if __name__ == '__main__':
 #        dspD.setPort(port)
 #    except:
 #        print u"Не удалось открыть порт COM" + str(port) + u"."
-#        sys.exit()
-
-#    try:
-#        dspD.readPort()
-#    except:
-#        print u"Не удалось считать данные."
 #        sys.exit()
 
     try:
