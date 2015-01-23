@@ -230,6 +230,9 @@ class DSPdata():
                 val = self.buf[i * 2 * self.NUMBER_PLOTS + j * 2 + 1]
                 val += self.buf[i * 2 * self.NUMBER_PLOTS + j * 2]
                 val = int(val, 16)
+                # отрицательные числа
+                if val >= 32768:
+                    val = val - 65536;
                 ydata[j].append(val)
 
         # диапазон значений по оси-X
@@ -243,11 +246,15 @@ class DSPdata():
 
         xmax = 1
         ymax = 1
+        ymin = 0
         if len(ydata[i]) != 0:
             xmax = max(xmax, len(ydata[i]))
-            ymax = max(ymax, max([max(x) for x in ydata]))
+            ymax = max(ymax, max([max(n) for n in ydata]))
+            ymin = min(ymin, min([min(n) for n in ydata]))
         self._ax.set_xlim(0, xmax)
-        self._ax.set_ylim(0, ymax)
+        ymin = (ymin * 1.05) if ymin < 0 else (ymin * 0.05)
+        ymax = (ymax * 0.95) if ymax < 0 else (ymax * 1.05)
+        self._ax.set_ylim(ymin, ymax)
 
         self._fig.canvas.draw()
 #
