@@ -13,10 +13,13 @@ import time
 import FileDialog  # для py2exe
 
 #from matplotlib import mlab
+import matplotlib
 from matplotlib import rc
+from matplotlib import numpy
 from matplotlib import pyplot
 from matplotlib import ticker
-from matplotlib.widgets import Button, RadioButtons, CheckButtons
+from matplotlib.backend_bases import NavigationToolbar2, Event
+from matplotlib.widgets import Button, RadioButtons, CheckButtons, SpanSelector
 from matplotlib.widgets import Cursor
 from serial.tools import list_ports
 #from PyQt4.Qt import right
@@ -50,8 +53,11 @@ class DSPdata():
     ## Графики
     _line = []
 
-    ## Оси ?!
-    _ax = None
+    ## График исходных данных
+    _axOriginal = None
+
+    ## График изменяемый
+    _axDinamic = None
 
     ## График
     _fig = None
@@ -120,12 +126,53 @@ class DSPdata():
 
     ##
     def checkPlot(self, label):
-        ''' (None) -> None
+        ''' (Num) -> None
         
-            Вкл./выкл. отображения графиков
+            Вкл./выкл. отображения графика по его номеру.
         '''
         num = int(label[-1]) - 1
-        self._line[num].set_visible(not self._line[num].get_visible())
+        vis = not self._line[num].get_visible()
+        self._line[num].set_visible(vis)
+        print self._axDinamic.get_lines()
+        print self._axDinamic.get_lines()[num]
+        self._axDinamic.get_lines()[num].set_visible(vis)
+        self._fig.canvas.draw()
+
+    ##
+    def onselect(self, xmin=0, xmax=100000):
+        ''' (Num, Num) -> None
+        
+            Действие при выборе диапазона.
+        '''
+        x = self._line[0].get_xdata()
+
+        if len(x) == 0:
+            return
+
+        indmin, indmax = numpy.searchsorted(x, (xmin, xmax))
+
+        xmin = max(0, int(xmin))
+        xmax = min(len(x), int(xmax + 2))
+
+        ymin = 100000
+        ymax = -100000
+        for i in range(1, self.NUMBER_PLOTS):
+            line = self._line[i]
+            if line.get_visible():
+                ymin = min(ymin, min(line.get_ydata()[xmin:xmax]))
+                ymax = max(ymax, max(line.get_ydata()[xmin:xmax]))
+#        self._axDinamic.cla()
+#
+#        for i in range(self.NUMBER_PLOTS):
+#            y = self._line[i].get_ydata()[xmin:xmax]
+#            l, = self._axDinamic.plot(thisx, y, '.-', lw=2, label=str(i + 1))
+#            l.set_visible(self._line[i].get_visible())
+
+        self._xlim = [xmin, xmax - 1]
+        self._ylim = [ymin, ymax]
+
+        self._axDinamic.set_xlim(self._xlim)
+        self._axDinamic.set_ylim(self._ylim)
         self._fig.canvas.draw()
 
     ##
@@ -135,20 +182,53 @@ class DSPdata():
             Подготовка графиков к выводу.
         '''
 
+        def new_home(self, *args, **kwargs):
+            ''' (xz, xz) -> None
+            
+                Обработчик события нажатия на кнопку "Reset original view."
+                Применяется для подмены встроенного обработчика на "пустышку".
+            '''
+            s = 'home_event'
+            event = Event(s, self)
+#            event.foo = 100 # пример передачи параметра в обработчик
+            self.canvas.callbacks.process(s, event)
+#            NavigationToolbar2.home(self, *args, **kwargs)  # вызов оригинального обработчика
+
+        def handle_home(evt):
+            ''' (Event) -> None
+                
+                Установка границ отображения динамического графика в исходное
+                состояние. Применяется при нажатии на кнопку "Reset original
+                view".
+            '''
+            self._axDinamic.set_xlim(self._xlim)
+            self._axDinamic.set_ylim(self._ylim)
+            self._fig.canvas.draw()
+
+        # подмена обработчика нажатия кнопки "Reset original view"
+        NavigationToolbar2.home = new_home
+
 #        pyplot.xkcd()  # Вид графика от руки
 #        self._fig = pyplot.figure(u"Данные DSP")
         self._fig = pyplot.figure(u"Данные DSP")  # facecolor='white'
-        self._ax = pyplot.subplot()
+        self._fig.canvas.mpl_connect('home_event', handle_home)
+        self._axDinamic = pyplot.subplot(2, 1, 2)
+        pyplot.grid()
+        self._axOriginal = pyplot.subplot(2, 1, 1)
+        self._axOriginal.set_navigate(False)  # запрет изменения графика
+
         pyplot.axis('tight')
         for i in range(self.NUMBER_PLOTS):
-            d = range(2)
-            y = range(i, 2 + i)
-            l, = self._ax.plot(d, y, '.-', lw=2, label=str(i + 1))
+            d = range(10)
+            y = range(i, len(d) + i)
+            l, = self._axOriginal.plot(d, y, '.-', lw=2, label=str(i + 1))
+            self._axDinamic.plot(d, y, '.-', lw=2, label=str(i + 1))
             self._line.append(l)
+        self.onselect()
 
         # loc='lower left', bbox_to_anchor=(1.0, 0.4),
         pyplot.legend(framealpha=0.5, fancybox=True)
-        self._ax.axis('auto')
+        self._axOriginal.axis('auto')
 
         pyplot.grid()
         # отключение автоматического смещения по осям (например, для оси y
@@ -179,8 +259,12 @@ class DSPdata():
         check.on_clicked(self.checkPlot)
 
         # мульти курсор
-        cursor = Cursor(self._ax, horizOn=False, useblit=True)
+        cursor = Cursor(self._axDinamic, horizOn=False, useblit=True)
 
+        # выбор диапазона
+        self._span = SpanSelector(self._axOriginal, self.onselect, 'horizontal',
+                            useblit=True, span_stays=True,
+                            rectprops=dict(alpha=0.5, facecolor='red'))
         pyplot.show()
 
     ##
@@ -193,8 +277,10 @@ class DSPdata():
         for i in range(self.NUMBER_PLOTS):
             self._line[i].set_data(d, d)
 
-        self._ax.set_ylim(0, 1)
-        self._ax.set_xlim(0, 1)
+        self._axOriginal.set_ylim(0, 1)
+        self._axOriginal.set_xlim(0, 1)
+        self._axDinamic.set_ylim(0, 1)
+        self._axDinamic.set_xlim(0, 1)
         self._fig.canvas.draw()
 
     ##
@@ -247,15 +333,15 @@ class DSPdata():
         xmax = 1
         ymax = 1
         ymin = 0
-        if len(ydata[i]) != 0:
+        if len(ydata[0]) != 0:
             xmax = max(xmax, len(ydata[i]))
             ymax = max(ymax, max([max(n) for n in ydata]))
             ymin = min(ymin, min([min(n) for n in ydata]))
-        self._ax.set_xlim(0, xmax)
+        self._axOriginal.set_xlim(0, xmax)
         ymin = (ymin * 1.05) if ymin < 0 else (ymin * 0.05)
         ymax = (ymax * 0.95) if ymax < 0 else (ymax * 1.05)
-        self._ax.set_ylim(ymin, ymax)
-
+        self._axOriginal.set_ylim(ymin, ymax)
+        self.onselect()
         self._fig.canvas.draw()
 #
 
@@ -286,11 +372,11 @@ if __name__ == '__main__':
 #        print u"Не удалось открыть порт COM" + str(port) + u"."
 #        sys.exit()
 
-    try:
-        dspD.setupPlot()
-    except:
-        print u"Не удалось подготовить график."
-        sys.exit()
+#    try:
+    dspD.setupPlot()
+#    except:
+#        print u"Не удалось подготовить график."
+#        sys.exit()
 
 #    try:
 #        dspD.printData()
