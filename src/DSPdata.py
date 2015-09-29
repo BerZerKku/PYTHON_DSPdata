@@ -101,7 +101,7 @@ class DSPdata():
         self.buf[:] = []
         try:
             # timeout - максимальное время между принимаемыми символами
-            s = serial.Serial(self.num, 115200, timeout=0.01)
+            s = serial.Serial(self.num, 115200, timeout=0.1)
         except serial.SerialException, e:
             raise IOError
 
@@ -133,8 +133,8 @@ class DSPdata():
         num = int(label[-1]) - 1
         vis = not self._line[num].get_visible()
         self._line[num].set_visible(vis)
-        print self._axDinamic.get_lines(),
-        print self._axDinamic.get_lines()[num]
+#        print self._axDinamic.get_lines(),
+#        print self._axDinamic.get_lines()[num]
         self._axDinamic.get_lines()[num].set_visible(vis)
         self.onselect(-1, -1)
         self._fig.canvas.draw()
@@ -161,7 +161,7 @@ class DSPdata():
 
         ymin = 100000
         ymax = -100000
-        for i in range(1, self.NUMBER_PLOTS):
+        for i in range(0, self.NUMBER_PLOTS):
             line = self._line[i]
             if line.get_visible():
                 ymin = min(ymin, min(line.get_ydata()[xmin:xmax]))
