@@ -133,9 +133,10 @@ class DSPdata():
         num = int(label[-1]) - 1
         vis = not self._line[num].get_visible()
         self._line[num].set_visible(vis)
-        print self._axDinamic.get_lines()
+        print self._axDinamic.get_lines(),
         print self._axDinamic.get_lines()[num]
         self._axDinamic.get_lines()[num].set_visible(vis)
+        self.onselect(-1, -1)
         self._fig.canvas.draw()
 
     ##
@@ -149,10 +150,14 @@ class DSPdata():
         if len(x) == 0:
             return
 
-        indmin, indmax = numpy.searchsorted(x, (xmin, xmax))
+        if xmin >= 0 and xmax >= 0:
+            indmin, indmax = numpy.searchsorted(x, (xmin, xmax))
 
-        xmin = max(0, int(xmin))
-        xmax = min(len(x), int(xmax + 2))
+            xmin = max(0, int(xmin))
+            xmax = min(len(x), int(xmax + 2))
+        else:
+            xmin = self._xlim[0]
+            xmax = self._xlim[1]
 
         ymin = 100000
         ymax = -100000
@@ -161,12 +166,12 @@ class DSPdata():
             if line.get_visible():
                 ymin = min(ymin, min(line.get_ydata()[xmin:xmax]))
                 ymax = max(ymax, max(line.get_ydata()[xmin:xmax]))
-#        self._axDinamic.cla()
-#
-#        for i in range(self.NUMBER_PLOTS):
-#            y = self._line[i].get_ydata()[xmin:xmax]
-#            l, = self._axDinamic.plot(thisx, y, '.-', lw=2, label=str(i + 1))
-#            l.set_visible(self._line[i].get_visible())
+    #        self._axDinamic.cla()
+    #
+    #        for i in range(self.NUMBER_PLOTS):
+    #            y = self._line[i].get_ydata()[xmin:xmax]
+    #            l, = self._axDinamic.plot(thisx, y, '.-', lw=2, label=str(i + 1))
+    #            l.set_visible(self._line[i].get_visible())
 
         self._xlim = [xmin, xmax - 1]
         self._ylim = [ymin, ymax]
@@ -296,6 +301,7 @@ class DSPdata():
         except:
             print u"Не удалось считать данные."
 
+
     ##
     def printData(self):
         ''' None -> None
@@ -329,6 +335,7 @@ class DSPdata():
 
         for i in range(self.NUMBER_PLOTS):
             self._line[i].set_data(xlist, ydata[i])
+            self._axDinamic.get_lines()[i].set_data(xlist, ydata[i])
 
         xmax = 1
         ymax = 1
@@ -341,7 +348,7 @@ class DSPdata():
         ymin = (ymin * 1.05) if ymin < 0 else (ymin * 0.05)
         ymax = (ymax * 0.95) if ymax < 0 else (ymax * 1.05)
         self._axOriginal.set_ylim(ymin, ymax)
-        self.onselect()
+        self.onselect(-1, -1)
         self._fig.canvas.draw()
 #
 
